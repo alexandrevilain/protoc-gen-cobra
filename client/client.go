@@ -46,10 +46,11 @@ type Config struct {
 	CertFile           string
 	KeyFile            string
 
-	flagBinders []FlagBinder
-	preDialers  []PreDialer
-	inDecoders  map[string]iocodec.DecoderMaker
-	outEncoders map[string]iocodec.EncoderMaker
+	flagBinders  []FlagBinder
+	preDialers   []PreDialer
+	computedOpts []ComputedOption
+	inDecoders   map[string]iocodec.DecoderMaker
+	outEncoders  map[string]iocodec.EncoderMaker
 }
 
 var DefaultConfig = &Config{
@@ -151,6 +152,14 @@ func (c *Config) encoderFormats() []string {
 func RoundTrip(ctx context.Context, cfg *Config, fn func(grpc.ClientConnInterface, iocodec.Decoder, iocodec.Encoder) error) error {
 	var err error
 	var in iocodec.Decoder
+
+	for _, opt := range cfg.computedOpts {
+		err := opt(cfg)
+		if err != nil {
+			return err
+		}
+	}
+
 	if in, err = cfg.makeDecoder(); err != nil {
 		return err
 	}

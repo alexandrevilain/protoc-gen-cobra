@@ -9,6 +9,9 @@ import (
 
 type Option func(*Config)
 
+// ComputedOption are applied just before running the request.
+type ComputedOption func(*Config) error
+
 func WithServerAddr(addr string) Option {
 	return func(c *Config) {
 		c.ServerAddr = addr
@@ -111,5 +114,12 @@ func WithOutputEncoder(format string, maker iocodec.EncoderMaker) Option {
 		}
 		e[format] = maker
 		c.outEncoders = e
+	}
+}
+
+// WithComputedOption registers options that are applied just before running the request.
+func WithComputedOption(opt ComputedOption) Option {
+	return func(c *Config) {
+		c.computedOpts = append(c.computedOpts, opt)
 	}
 }
