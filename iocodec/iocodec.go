@@ -34,7 +34,9 @@ func JSONDecoderMaker() DecoderMaker {
 }
 
 func JSONEncoderMaker(pretty bool) EncoderMaker {
-	m := &jsonpb.Marshaler{}
+	m := &jsonpb.Marshaler{
+		EmitDefaults: true,
+	}
 	if pretty {
 		m.Indent = "  "
 	}
