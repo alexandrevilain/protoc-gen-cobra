@@ -49,8 +49,8 @@ func {{.GoName}}ClientCommand(options ...client.Option) *cobra.Command {
 }
 `
 	serviceTemplate = template.Must(template.New("service").
-		Funcs(template.FuncMap{"cleanComments": cleanComments}).
-		Parse(serviceTemplateCode))
+			Funcs(template.FuncMap{"cleanComments": cleanComments}).
+			Parse(serviceTemplateCode))
 	serviceImports = []protogen.GoImportPath{
 		"github.com/NathanBaulch/protoc-gen-cobra/client",
 		"github.com/spf13/cobra",
@@ -178,8 +178,8 @@ func _{{.Parent.GoName}}{{.GoName}}Command(cfg *client.Config) *cobra.Command {
 }
 `
 	methodTemplate = template.Must(template.New("method").
-		Funcs(template.FuncMap{"cleanComments": cleanComments}).
-		Parse(methodTemplateCode))
+			Funcs(template.FuncMap{"cleanComments": cleanComments}).
+			Parse(methodTemplateCode))
 	methodImports = []protogen.GoImportPath{
 		"github.com/golang/protobuf/proto",
 		"github.com/NathanBaulch/protoc-gen-cobra/client",
@@ -356,7 +356,7 @@ func flagFormat(g *protogen.GeneratedFile, fld *protogen.Field, enums map[string
 			return fmt.Sprintf("_%sPointerVar(cmd.PersistentFlags(), %%s, %%s, %%q)", id)
 		} else {
 			e.Value = true
-			return fmt.Sprintf("_%sVar(cmd.PersistentFlags(), %%s, %%s, %%q)", id)
+			return fmt.Sprintf("_%sVar(cmd.PersistentFlags(), %%s, %%s, %%q)", varNameFromQualifiedGoIdent(id))
 		}
 	case protoreflect.MessageKind:
 		if kt, ok := knownTypes[fld.Message.GoIdent]; ok {
@@ -460,24 +460,24 @@ type enum struct {
 var (
 	enumTemplateCode = `
 {{if .Value}}
-type _{{.GoIdent.GoName}}Value {{.GoIdent.GoName}}
+type _{{varQualifiedGoIdent .GoIdent}}Value {{qualifiedGoIdent .GoIdent}}
 
-func _{{.GoIdent.GoName}}Var(fs *pflag.FlagSet, p *{{.GoIdent.GoName}}, name, usage string) {
-	fs.Var((*_{{.GoIdent.GoName}}Value)(p), name, usage)
+func _{{varQualifiedGoIdent .GoIdent}}Var(fs *pflag.FlagSet, p *{{qualifiedGoIdent .GoIdent}}, name, usage string) {
+	fs.Var((*_{{varQualifiedGoIdent .GoIdent}}Value)(p), name, usage)
 }
 
-func (v *_{{.GoIdent.GoName}}Value) Set(val string) error {
+func (v *_{{varQualifiedGoIdent .GoIdent}}Value) Set(val string) error {
 	if e, err := parse{{.GoIdent.GoName}}(val); err != nil {
 		return err
 	} else {
-		*v = _{{.GoIdent.GoName}}Value(e)
+		*v = _{{varQualifiedGoIdent .GoIdent}}Value(e)
 		return nil
 	}
 }
 
-func (*_{{.GoIdent.GoName}}Value) Type() string { return "{{.GoIdent.GoName}}" }
+func (*_{{varQualifiedGoIdent .GoIdent}}Value) Type() string { return "{{.GoIdent.GoName}}" }
 
-func (v *_{{.GoIdent.GoName}}Value) String() string { return ({{.GoIdent.GoName}})(*v).String() }
+func (v *_{{varQualifiedGoIdent .GoIdent}}Value) String() string { return ({{qualifiedGoIdent .GoIdent}})(*v).String() }
 {{end}}
 {{if .Pointer }}
 func _{{.GoIdent.GoName}}PointerVar(fs *pflag.FlagSet, p **{{.GoIdent.GoName}}, name, usage string) {
@@ -531,24 +531,33 @@ func _{{.GoIdent.GoName}}Parse(val string) (interface{}, error) {
 }
 {{end}}
 
-func parse{{.GoIdent.GoName}}(s string) ({{.GoIdent.GoName}}, error) {
-	if i, ok := {{.GoIdent.GoName}}_value[s]; ok {
-		return {{.GoIdent.GoName}}(i), nil
+func parse{{.GoIdent.GoName}}(s string) ({{qualifiedGoIdent .GoIdent}}, error) {
+	if i, ok := {{qualifiedGoIdent .GoIdent}}_value[s]; ok {
+		return {{qualifiedGoIdent .GoIdent}}(i), nil
 	} else if i, err := strconv.ParseInt(s, 0, 32); err == nil {
-		return {{.GoIdent.GoName}}(i), nil
+		return {{qualifiedGoIdent .GoIdent}}(i), nil
 	} else {
 		return 0, err
 	}
 }
 `
-	enumTemplate = template.Must(template.New("enum").Parse(enumTemplateCode))
-	enumImports  = []protogen.GoImportPath{
+
+	enumImports = []protogen.GoImportPath{
 		"strconv",
 		"github.com/spf13/pflag",
 	}
 )
 
 func genEnum(g *protogen.GeneratedFile, enum *enum) error {
+	enumTemplate := template.Must(template.New("enum").Funcs(template.FuncMap{
+		"qualifiedGoIdent": func(i protogen.GoIdent) string {
+			return g.QualifiedGoIdent(i)
+		},
+		"varQualifiedGoIdent": func(i protogen.GoIdent) string {
+			return varNameFromQualifiedGoIdent(g.QualifiedGoIdent(i))
+		},
+	}).Parse(enumTemplateCode))
+
 	for _, imp := range enumImports {
 		g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: imp})
 	}
@@ -560,4 +569,8 @@ func genEnum(g *protogen.GeneratedFile, enum *enum) error {
 
 func cleanComments(comments protogen.Comments) string {
 	return strings.TrimSpace(string(comments))
+}
+
+func varNameFromQualifiedGoIdent(s string) string {
+	return strings.ReplaceAll(s, ".", "_")
 }
