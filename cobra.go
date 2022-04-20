@@ -112,7 +112,7 @@ func _{{.Parent.GoName}}{{.GoName}}Command(cfg *client.Config) *cobra.Command {
 			}
 			return client.RoundTrip(cmd.Context(), cfg, func(cc grpc.ClientConnInterface, in iocodec.Decoder, out iocodec.Encoder) error {
 				cli := New{{.Parent.GoName}}Client(cc)
-				v := &{{.Input.GoIdent.GoName}}{}
+				v := &{{ qualifiedGoIdent .Input.GoIdent}}{}
 	{{if .Desc.IsStreamingClient}}
 				stm, err := cli.{{.GoName}}(cmd.Context())
 				if err != nil {
@@ -177,9 +177,7 @@ func _{{.Parent.GoName}}{{.GoName}}Command(cfg *client.Config) *cobra.Command {
 	return cmd
 }
 `
-	methodTemplate = template.Must(template.New("method").
-			Funcs(template.FuncMap{"cleanComments": cleanComments}).
-			Parse(methodTemplateCode))
+
 	methodImports = []protogen.GoImportPath{
 		"github.com/golang/protobuf/proto",
 		"github.com/NathanBaulch/protoc-gen-cobra/client",
@@ -191,6 +189,14 @@ func _{{.Parent.GoName}}{{.GoName}}Command(cfg *client.Config) *cobra.Command {
 )
 
 func genMethod(g *protogen.GeneratedFile, method *protogen.Method, enums map[string]*enum) error {
+	methodTemplate := template.Must(template.New("method").
+		Funcs(template.FuncMap{
+			"cleanComments": cleanComments,
+			"qualifiedGoIdent": func(i protogen.GoIdent) string {
+				return g.QualifiedGoIdent(i)
+			}}).
+		Parse(methodTemplateCode))
+
 	for _, imp := range methodImports {
 		g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: imp})
 	}
