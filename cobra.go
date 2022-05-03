@@ -22,8 +22,10 @@ func genFile(gen *protogen.Plugin, file *protogen.File) error {
 	g.P("package ", file.GoPackageName)
 	g.P()
 
+	enums := make(map[string]*enum)
+
 	for _, srv := range file.Services {
-		if err := genService(g, srv); err != nil {
+		if err := genService(g, srv, enums); err != nil {
 			return err
 		}
 	}
@@ -57,7 +59,7 @@ func {{.GoName}}ClientCommand(options ...client.Option) *cobra.Command {
 	}
 )
 
-func genService(g *protogen.GeneratedFile, service *protogen.Service) error {
+func genService(g *protogen.GeneratedFile, service *protogen.Service, enums map[string]*enum) error {
 	for _, imp := range serviceImports {
 		g.QualifiedGoIdent(protogen.GoIdent{GoImportPath: imp})
 	}
@@ -65,27 +67,42 @@ func genService(g *protogen.GeneratedFile, service *protogen.Service) error {
 		return err
 	}
 
-	enums := make(map[string]*enum)
+	serviceEnums := make(map[string]*enum)
 
 	for _, mth := range service.Methods {
-		if err := genMethod(g, mth, enums); err != nil {
+		if err := genMethod(g, mth, serviceEnums); err != nil {
 			return err
 		}
 	}
 
-	if len(enums) > 0 {
-		names := make([]string, len(enums))
+	enumsToGenerate := make(map[string]*enum)
+
+	// Make diff between global enums and local enums
+	for name, value := range serviceEnums {
+		_, ok := enums[name]
+		if !ok {
+			enumsToGenerate[name] = value
+		}
+	}
+
+	if len(enumsToGenerate) > 0 {
+		names := make([]string, len(enumsToGenerate))
 		i := 0
-		for name := range enums {
+		for name := range enumsToGenerate {
 			names[i] = name
 			i++
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			if err := genEnum(g, enums[name]); err != nil {
+			if err := genEnum(g, enumsToGenerate[name]); err != nil {
 				return err
 			}
 		}
+	}
+
+	// Once generated, add generated enums to the list of globals & already generated enums.
+	for name, value := range enumsToGenerate {
+		enums[name] = value
 	}
 
 	return nil
